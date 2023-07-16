@@ -80,7 +80,7 @@ public class GetBenchmark extends BaseBenchmark
 		}
 	}
 
-	// @Benchmark
+	@Benchmark
 	public boolean contains(ThreadState state)
 	{
 		return set.contains(lookup[state.nextIndex()]);
@@ -94,6 +94,6 @@ public class GetBenchmark extends BaseBenchmark
 
 	public static void main(String[] args) throws RunnerException
 	{
-		run(GetBenchmark.class, 8, false, false);
+		run(GetBenchmark.class, 8, false, false, args);
 	}
 }

@@ -37,24 +37,59 @@ public class BenchUtils
 	 * @param threads number of threads
 	 * @param debug don't fork and add a StackProfiler
 	 * @param gcprof add a GCProfiler
+	 * @param args command line options
 	 * @return the options
 	 */
-	public static ChainedOptionsBuilder options(Class<?> benchmarkClass, int threads, boolean debug, boolean gcprof)
+	public static ChainedOptionsBuilder options(Class<?> benchmarkClass, int threads, boolean debug, boolean gcprof,
+			String... args)
 	{
 		ChainedOptionsBuilder options = new OptionsBuilder() //
 				.include(benchmarkClass.getName()) //
 				.shouldDoGC(true) //
-				.jvmArgs("-Xmx28g") //
-				.threads(threads) //
-				.forks(debug ? 0 : 1) //
 				.resultFormat(ResultFormatType.SCSV) //
 				.result(String.format("%s-%d-%tY%<tm%<td-%<tH%<tM%<tS.csv", //
 						benchmarkClass.getSimpleName(), threads, new Date()));
+
+		// merge command line options
+		final CommandLineOptions clopts;
+		try
+		{
+			clopts = new CommandLineOptions(args);
+			if (clopts.shouldHelp())
+			{
+				clopts.showHelp();
+				System.exit(0);
+			}
+		}
+		catch (Exception e)
+		{
+			throw new RuntimeException(e);
+		}
+
+		// override options not specified on the command line
+		options.parent(clopts);
+		if (!clopts.getThreads().hasValue())
+			options.threads(threads);
+		if (!clopts.getJvmArgs().hasValue())
+			options.jvmArgs("-Xmx28g");
+
 		if (debug)
-			options = options.addProfiler(StackProfiler.class, "detailLine=true;line=5");
+			options = options.forks(0).addProfiler(StackProfiler.class, "detailLine=true;line=5");
 		if (gcprof)
 			options = options.addProfiler(GCProfiler.class);
 		return options;
+	}
+
+	private static void fixMavenClasspath()
+	{
+		ClassLoader loader = BenchUtils.class.getClassLoader();
+		if (loader instanceof URLClassLoader)
+		{
+			StringBuilder classpath = new StringBuilder();
+			for (URL url : ((URLClassLoader) loader).getURLs())
+				classpath.append(url.getPath()).append(File.pathSeparator);
+			System.setProperty("java.class.path", classpath.toString());
+		}
 	}
 
 	/**
@@ -66,6 +101,7 @@ public class BenchUtils
 	{
 		try
 		{
+			fixMavenClasspath();
 			new Runner(options.build()).run();
 		}
 		catch (Exception ex)
@@ -81,10 +117,11 @@ public class BenchUtils
 	 * @param threads number of threads
 	 * @param debug don't fork and add a StackProfiler
 	 * @param gcprof add a GCProfiler
+	 * @param args command line options
 	 */
-	public static void run(Class<?> benchmarkClass, int threads, boolean debug, boolean gcprof)
+	public static void run(Class<?> benchmarkClass, int threads, boolean debug, boolean gcprof, String... args)
 	{
-		run(options(benchmarkClass, threads, debug, gcprof));
+		run(options(benchmarkClass, threads, debug, gcprof, args));
 	}
 
 	/**

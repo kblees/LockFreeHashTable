@@ -130,7 +130,7 @@ public class AddBenchmark extends BaseBenchmark
 
 	public static void main(String[] args)
 	{
-		run(AddBenchmark.class, 8, false, false);
-		run(AddBenchmark.class, 1, false, true);
+		run(AddBenchmark.class, 8, false, false, args);
+		run(AddBenchmark.class, 1, false, true, args);
 	}
 }

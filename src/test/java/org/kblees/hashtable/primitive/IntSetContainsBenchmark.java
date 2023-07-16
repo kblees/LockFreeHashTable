@@ -64,6 +64,6 @@ public class IntSetContainsBenchmark extends IntSetBenchmark
 
 	public static void main(String[] args) throws RunnerException
 	{
-		run(IntSetContainsBenchmark.class, 8, false, false);
+		run(IntSetContainsBenchmark.class, 8, false, false, args);
 	}
 }

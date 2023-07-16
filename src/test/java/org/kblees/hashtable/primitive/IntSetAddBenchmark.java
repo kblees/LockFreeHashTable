@@ -50,6 +50,6 @@ public class IntSetAddBenchmark extends IntSetBenchmark
 
 	public static void main(String[] args)
 	{
-		run(IntSetAddBenchmark.class, 1, false, true);
+		run(IntSetAddBenchmark.class, 1, false, true, args);
 	}
 }

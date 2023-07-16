@@ -217,6 +217,6 @@ public class UpdateBenchmark extends BaseBenchmark
 
 	public static void main(String[] args) throws RunnerException
 	{
-		run(UpdateBenchmark.class, 8, false, false);
+		run(UpdateBenchmark.class, 8, false, false, args);
 	}
 }

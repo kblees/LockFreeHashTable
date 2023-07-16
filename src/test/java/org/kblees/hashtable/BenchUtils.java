@@ -6,11 +6,13 @@
  */
 package org.kblees.hashtable;
 
+import java.io.File;
 import java.lang.management.*;
 import java.lang.reflect.Field;
+import java.net.*;
 import java.util.*;
-import java.util.concurrent.atomic.AtomicInteger;
 
+import org.kblees.hashtable.primitive.IntHashSet;
 import org.openjdk.jmh.profile.*;
 import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
@@ -21,8 +23,6 @@ import org.openjdk.jmh.runner.options.*;
  */
 public class BenchUtils
 {
-	private static final AtomicInteger RND = new AtomicInteger(42);
-
 	/**
 	 * Cannot be instantiated.
 	 */
@@ -142,9 +142,11 @@ public class BenchUtils
 		return PHI * v;
 	}
 
+	private static final Random RND = new Random(0);
+
 	public static int randomInt()
 	{
-		return qrng(RND.getAndIncrement());
+		return RND.nextInt();
 	}
 
 	public static int randomInt(int bound)
@@ -159,8 +161,13 @@ public class BenchUtils
 			start = 0;
 		if (end <= start || end > result.length)
 			end = result.length;
+		IntHashSet iset = new IntHashSet(end - start);
 		for (int i = start; i < end; )
-			result[i++] = randomInt();
+		{
+			int rnd = randomInt();
+			if (iset.add(rnd))
+				result[i++] = rnd;
+		}
 		return result;
 	}
 

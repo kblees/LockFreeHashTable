@@ -25,7 +25,7 @@ public class IntSetAddBenchmark extends IntSetBenchmark
 	public void setupBenchmark()
 	{
 		int sz = (int) parseScaledLong(size);
-		insert = generateInts(sz, randomKeys);
+		insert = shuffle(generateInts(sz, randomKeys));
 	}
 
 	@State(Scope.Thread)

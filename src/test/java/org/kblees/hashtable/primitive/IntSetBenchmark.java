@@ -21,8 +21,9 @@ import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
+@Fork(3)
 @Warmup(iterations = 3, time = 10)
-@Measurement(iterations = 5, time = 10)
+@Measurement(iterations = 3, time = 10)
 public class IntSetBenchmark
 {
 	/**
@@ -39,12 +40,61 @@ public class IntSetBenchmark
 	 */
 	public enum IntSetType
 	{
-		SeparateChaining
+		Cellar
 		{
 			@Override
 			MinIntSet create(int capacity)
 			{
 				IntHashSet set = new IntHashSet(capacity);
+				return new MinIntSet()
+				{
+					public boolean add(int key)
+					{
+						return set.add(key);
+					};
+
+					public boolean contains(int key)
+					{
+						return set.contains(key);
+					};
+				};
+			}
+		},
+
+		Array
+		{
+			@Override
+			MinIntSet create(int capacity)
+			{
+				ArrayIntHashSet set = new ArrayIntHashSet(capacity);
+				return new MinIntSet()
+				{
+					public boolean add(int key)
+					{
+						return set.add(key);
+					};
+
+					public boolean contains(int key)
+					{
+						return set.contains(key);
+					};
+				};
+			}
+		},
+
+		Array94
+		{
+			@Override
+			MinIntSet create(int capacity)
+			{
+				ArrayIntHashSet set = new ArrayIntHashSet(capacity)
+				{
+					@Override
+					protected int maxCapacity(int tableSize)
+					{
+						return tableSize - (tableSize >>> 4);
+					};
+				};
 				return new MinIntSet()
 				{
 					public boolean add(int key)
@@ -216,7 +266,7 @@ public class IntSetBenchmark
 		abstract MinIntSet create(int capacity);
 	}
 
-	@Param({"SeparateChaining", "LockFree", "FastUtil", "Koloboke", "OpenLinearFibonacci", "OpenLinearMixModulo", "RobinHood"})
+	@Param({"Cellar", "Array", "Array94", "LockFree", "FastUtil", "Koloboke", "OpenLinearFibonacci", "RobinHood"})
 	IntSetType type;
 
 	@Param({ "true", "false" })

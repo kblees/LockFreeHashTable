@@ -12,38 +12,66 @@ Thus, comparing open addressing by value hash tables with separate chaining by r
 
 ## The Reality
 
-To somewhat level the playing field, I have written a separate chaining hash table that stores 32 bit integer keys by value. Collisions go into a separate collision area, or "cellar" (Williams, Handling identifies as internal symbols in language processors, CACM vol. 2 no. 6, 1959). As buckets stay separate, keys can be abbreviated to make room for the link fields (Knuth, The Art of Computer Programming vol. 3, 2nd ed., 1998, 6.4 exercise 13, p.551). The link values 0 and -1 (all 1 bits) serve as sentinels to indicate an empty slot or end of chain, respectively. The hash table has no fixed max load factor, it simply resizes if the collision area is full. The default size of the collision area is 0.375 (3/8) of the table size, which corresponds to a max load factor of ~1 for uniformly distributed keys.
+To somewhat level the playing field, I have written two separate chaining hash tables that store 32 bit integer keys by value.
 
-This simple separate chaining hash table is benchmarked against the integer hash sets from the FastUtil and Koloboke libraries (both using open addressing with stride one linear probing). Furthermore, I've added my own (rather incomplete) open addressing implementation, using multiplicative hashing as suggested by Knuth (The Art of Computer Programming vol. 3, 2nd ed., 1998, 6.4, p.528), as well as an implementation of robin hood hashing. The last contestant is based on my LockFreeHashTable (i.e. a lock free separate chaining hash table for primitive integers).
+### Separate chaining using a Cellar
 
-![IntSet.contains, random keys, avg miss, 8 threads](bench/IntSet-contains-rnd-avg-8.png)
+The first one stores collisions in a separate collision area, or "cellar" (Williams, Handling identifies as internal symbols in language processors, CACM vol. 2 no. 6, 1959). As buckets stay separate, keys can be abbreviated to make room for the link fields (Knuth, The Art of Computer Programming vol. 3, 2nd ed., 1998, 6.4 exercise 13, p.551). The link values 0 and -1 (all 1 bits) serve as sentinels to indicate an empty slot or end of chain, respectively. The hash table has no fixed max load factor, it simply resizes if the collision area is full. The default size of the collision area is 0.375 (3/8) of the table size, which corresponds to a max load factor of ~1 for uniformly distributed keys.
 
-![IntSet.contains, random keys, 0% miss, 8 threads](bench/IntSet-contains-rnd-0-8.png)
+The techniques used in this implementation have been well known and documented for at least 25 years. I coudn't get hold of the 1973 edition of Knuth's book, but I suspect that the key abbreviation trick was described there already - which would make it 50 years...
 
-![IntSet.contains, random keys, 100% miss, 8 threads](bench/IntSet-contains-rnd-100-8.png)
+### Separate chaining using Arrays
 
-![IntSet.add, random keys, pre-sized, 1 thread](bench/IntSet-add-rnd-pre-1.png)
+The second hash table implementation stores buckets continuously in "sub-arrays" of the hash table at or after the bucket index. E.g. if the bucket at index 10 has two entries, they are stored in slots 10 and 11. If the bucket at index 11 also has entries, they are stored starting at slot 12. As buckets stay separate, keys can be abbreviated to make room for an 'end-of-chain' bit that indicates whether an entry is the last of its bucket, and an 'offset' field which stores the offset of the start of the bucket. In the example above, slot 11 would have offset == 1 because bucket #11 starts at slot 12. The default load factor of the hash table is 0.75, however, in contrast to open addressing, using higher load factors such as 0.9375 (15/16) doesn't significantly affect performance.
 
-![IntSet memory consumption](bench/IntSet-mem.png)
+This implementation is similar to the array hash table described by Askitis / Zobel in "Cache-Conscious Collision Resolution in String Hash Tables" (2005), only that there are no separately allocated arrays per bucket, but the arrays are stored flatly within the hash table. There are also similarities with robin hood hashing: The entries are stored at exactly the same locations as with robin hood hashing, however, robin hood hashing needs to probe to find the start of a bucket, while this implementation knows the start of the bucket from the offset.
 
+### Benchmarks
 
-The benchmarks show that the simple separate chaining version is significantly faster than all the other contestants, while using slightly less memory than the open addressing schemes. The lock free separate chaining version uses about twice the memory, yet for big hash tables (> 4 million entries), lookups keep up quite well with the open addressing variants (while allowing thread safe concurrent updates!).
+These separate chaining hash tables are benchmarked against the integer hash sets from the FastUtil and Koloboke libraries (both using open addressing with stride one linear probing). Furthermore, I've added my own (rather incomplete) open addressing implementations, using multiplicative hashing as suggested by Knuth (The Art of Computer Programming vol. 3, 2nd ed., 1998, 6.4, p.528), as well as an implementation of robin hood hashing. The last contestant is based on my LockFreeHashTable (i.e. a lock free separate chaining hash table adapted for primitive integers).
+
+#### Lookup Performance
+
+![IntSet.contains, avg miss, 8 threads](bench/IntSet-contains-avg-8.png)
+
+![IntSet.contains, 0% miss, 8 threads](bench/IntSet-contains-0-8.png)
+
+![IntSet.contains, 100% miss, 8 threads](bench/IntSet-contains-100-8.png)
+
+![IntSet.contains, random keys, 8 threads](bench/IntSet-contains-rnd-avg-8.png)
+
+![IntSet.contains, sequential keys, 8 threads](bench/IntSet-contains-seq-avg-8.png)
+
+The benchmarks show that overall lookup performance of both separate chaining variants presented here is about 10 % better than the fastest open addressing schemes. Successful lookup performance is about the same, while unsuccessful lookups are significantly faster in separate chaininig variants. Similarly, lookup performance using random keys is about the same, while looking up sequential keys is significantly faster with separate chaining. The lock free separate chaining version is only about 15 % slower than open addressing (while allowing thread safe concurrent updates!).
+
+#### Insertion performance
+
+![IntSet.add, 1 thread](bench/IntSet-add-1.png)
+
+The separate chaining version using a cellar offers the best insertion performance. The array variant is comparatively slow for small tables, as it uses a more complex insertion algorithm (the current implementation requires up to three passes over the entries following the hash location, so there's probably still room for optimization). Large tables are unaffected by this, as memory latency is the limiting factor here. Naturally, the version with a max load factor of 0.9375 spends more time finding free spots when the table is nearly full.
+
+#### Memory Consumption
+
+The array variant at load factor 0.9375 uses the least amount of memory on average (6.3 bytes per entry), followed by the cellar version (7.5 bytes per entry). Most open addressing schemes and the default array version use a load factor of 0.75, which amounts to 7.8 bytes per entry. Koloboke is the only open addressing variant with a lower load factor, using 8.7 bytes per entry. The lock free version uses 12.8 bytes, as it needs to maintain two pointers per entry.
+
+In comparison, `java.util.HashSet<Integer>` requires ~56 bytes per entry.
+
+### Conclusion
 
 These measurements suggest that the notion that open addressing is faster than separate chaining is false. In particular, the cache locality benefit attributed to open addressing with linear probing cannot be observed in practice.
 
-The good performance of the simple separate chaining hash table could be explained by the fact that the large, sparsely filled hash table is accompanied with a comparatively small, densely packed collision area. In relation to its size, the collision area is accessed up to twice as often as the main hash table, so that it is likely to stay in cache. Thus, collisions are essentially free with respect to cache misses.
+Apart from its performance and size benefits, separate chaining offers a lot of other desirable properties, such as less variance in performance (successful vs. unsuccessful lookups, before vs. after resize), resilience to non-uniform hashes, resilience to hash collision attacks (only one bucket is affected), straightforward delete implementation etc..
 
-This is in addition to other desirable properties of separate chaining, such as less variance in performance (successful vs. unsuccessful lookups, before vs. after resize), resilience to non-uniform hashes, resilience to hash collision attacks (only one bucket is affected), straightforward delete implementation etc..
 
 ## The Theory
 
-Even in theory, the cache locality benefit of open addressing is mediocre at best and deteriorates quickly with the size of the data. The expected probe counts for successful and unsuccessful lookups for separate chaining and linear probing can be calculated using formulas from Knuth's book (The Art of Computer Programming vol. 3, 2nd ed., 1998, 6.4, p.525 and p.528). For separate chaining, each probe can be assumed to be a cache miss. For linear probing, the expected cache misses can be calculated based on probe count, data size and cache line size as follows:
+Even in theory, the cache locality benefit of open addressing is mediocre at best and deteriorates quickly with the size of the data. The expected probe counts for successful and unsuccessful lookups for separate chaining and linear probing can be calculated using formulas from Knuth's book (The Art of Computer Programming vol. 3, 2nd ed., 1998, 6.4, p.525 and p.528). For separate chaining using linked lists (e.g. the cellar version), each probe can be assumed to be a cache miss. For linear probing and separate chaining using arrays, the expected cache misses can be calculated based on probe count, data size and cache line size as follows:
 
 $$
 \small CacheMisses := \frac{ProbeCount \times DataSize + CacheLineSize - Alignment}{CacheLineSize}
 $$
 
-With a cache line size of 64 and alignment equal to the data size, the resulting graphs show that linear probing with as few as 16 bytes of data per entry produces more cache misses than chaining for typical load factors. 
+With a cache line size of 64 and alignment equal to the data size, the resulting graphs show that linear probing with as few as 16 bytes of data per entry produces more cache misses than separate chaining with linked lists for typical load factors. For separate chaining with arrays, the expected cache misses are very close to 1 (as the expected probe count is at most 1.5).
 
 ![Cache misses](bench/CacheMisses.png)
 
